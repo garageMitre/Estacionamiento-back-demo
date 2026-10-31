@@ -954,6 +954,61 @@ export class SuscripcionesService {
     return this.detalle(empresaId);
   }
 
+  /**
+   * Suma días antes de suspender, sin tocar lo que debe: ni la prueba ni lo pagado se mueven, así
+   * que la factura conserva su período y su importe (también el primer pago, que es proporcional
+   * al fin de la prueba). Se suman a lo que ya tenía y duran hasta que pague.
+   */
+  async diasDeGracia(
+    empresaId: string,
+    dias: number,
+    motivo: string,
+    actor: string | null,
+  ) {
+    const hoy = hoyAR();
+    await this.enCuenta(empresaId, async (m, cuenta) => {
+      if (!cuenta.pruebaHasta && !cuenta.pagadoHasta)
+        throw new BadRequestException({
+          code: 'SIN_ACTIVAR',
+          message: 'Primero dale el alta a la cuenta.',
+        });
+      if (cuenta.bonificada)
+        throw new BadRequestException({
+          code: 'CUENTA_BONIFICADA',
+          message: 'Está bonificada: no se le factura ni se suspende.',
+        });
+      // Una suspendida también tiene su corte, ya pasado: entonces se cuenta desde hoy.
+      const { suspendeEl } = situacionDeCuenta(
+        { ...cuenta, empresaEstado: 'ACTIVA' },
+        hoy,
+      );
+      const ultimoConAcceso = sumarDias(suspendeEl as string, -1);
+      const hasta = sumarDias(
+        ultimoConAcceso > hoy ? ultimoConAcceso : hoy,
+        dias,
+      );
+      if (diasEntre(hoy, hasta) > 90)
+        throw new BadRequestException({
+          code: 'GRACIA_EXCEDIDA',
+          message: 'La gracia no puede llegar a más de 90 días desde hoy.',
+        });
+      await m
+        .getRepository(Suscripcion)
+        .update({ empresaId }, { prorrogaHasta: hasta });
+      await this.reactivarSiCorresponde(
+        m,
+        { ...cuenta, prorrogaHasta: hasta },
+        actor,
+      );
+      await this.auditar(m, empresaId, actor, 'SUSCRIPCION_DIAS_GRACIA', {
+        dias,
+        hasta,
+        motivo,
+      });
+    });
+    return this.detalle(empresaId);
+  }
+
   async registrarPago(
     empresaId: string,
     dto: RegistrarPagoSaasDto,
@@ -1155,17 +1210,16 @@ export class SuscripcionesService {
       pagadoHastaAnterior: cuenta.pagadoHasta,
     });
     await repo.save(factura);
-    // Lo pagado llega más lejos que los días extra: ya no hacen falta.
-    const prorrogaHasta =
-      cuenta.prorrogaHasta && cuenta.prorrogaHasta > periodo.hasta
-        ? cuenta.prorrogaHasta
-        : null;
+    // Los días de gracia duran hasta que paga: no quedan de margen para el período siguiente.
     await m
       .getRepository(Suscripcion)
-      .update({ empresaId }, { pagadoHasta: periodo.hasta, prorrogaHasta });
+      .update(
+        { empresaId },
+        { pagadoHasta: periodo.hasta, prorrogaHasta: null },
+      );
     await this.reactivarSiCorresponde(
       m,
-      { ...cuenta, pagadoHasta: periodo.hasta, prorrogaHasta },
+      { ...cuenta, pagadoHasta: periodo.hasta, prorrogaHasta: null },
       actor,
     );
     await this.auditar(m, empresaId, actor, 'SUSCRIPCION_PAGO', {

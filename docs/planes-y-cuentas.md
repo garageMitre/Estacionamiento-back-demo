@@ -34,7 +34,12 @@ Alta ──(días de prueba gratis, opcionales)──▶ Fin de la prueba ──
   operando; con el sexto la tarea diaria la suspende (`FALTA_DE_PAGO`).
 - **Días extra** (`POST …/dias-extra` con `{ hasta, motivo }`): una sola acción. Si nunca pagó,
   alarga la prueba (y corre la primera factura); si ya paga, es una prórroga: corre la suspensión
-  sin mover el vencimiento, y el atraso se sigue contando.
+  sin mover el vencimiento, y el atraso se sigue contando. El panel lo ofrece solo como «Más prueba»,
+  para quien nunca pagó: alargar la prueba cambia el importe del primer pago.
+- **Días de gracia** (`POST …/dias-gracia` con `{ dias, motivo }`): suman días a la fecha de
+  suspensión en cualquier estado, también en el primer pago, sin mover la prueba ni lo pagado: la
+  factura conserva su período e importe y el atraso se sigue contando. Se acumulan (tope: 90 días
+  desde hoy), reactivan una suspensión por `FALTA_DE_PAGO` y terminan con el próximo pago.
 - **Pago**: si venía usando el sistema (al día, prueba o atrasada sin cortar) el período sigue
   desde su vencimiento, aunque pague tarde; si estaba cortada por falta de pago, arranca el día
   del pago. A fin de mes el aniversario se mantiene a fin de mes. Un pago, días extra o un cambio

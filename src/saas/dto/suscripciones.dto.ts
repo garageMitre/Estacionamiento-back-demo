@@ -132,6 +132,20 @@ export class DiasExtraDto {
   motivo: string;
 }
 
+// Días que se suman antes de suspender: no mueven el vencimiento ni lo que debe.
+export class DiasDeGraciaDto {
+  @IsInt()
+  @Min(1)
+  @Max(90)
+  dias: number;
+
+  @Transform(recortar)
+  @IsString()
+  @MinLength(3, { message: 'Contá brevemente por qué se dan días de gracia.' })
+  @MaxLength(300)
+  motivo: string;
+}
+
 export class RegistrarPagoSaasDto {
   @IsInt()
   @Min(1)

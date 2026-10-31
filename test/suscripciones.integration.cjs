@@ -267,6 +267,45 @@ test('días extra: alargan la prueba si nunca pagó, o corren la suspensión si 
   await assert.rejects(servicio.diasExtra(sinActivar.empresa.id, dia(5), 'Algo', superUser.id), /alta/);
 });
 
+test('días de gracia: se suman sin cambiar lo que debe y terminan cuando paga', async () => {
+  const { empresa, playas } = await nuevaEmpresa('Con gracia');
+  await servicio.asignarPlan(empresa.id, playas[0].id, { planId: (await plan('CHICA')).id }, superUser.id);
+  // Nunca pagó y ya venció: el primer pago es proporcional al fin de la prueba.
+  await fijar(empresa.id, { pruebaHasta: dia(-10) });
+  await servicio.revisarVencimientos();
+  assert.equal(await estadoEmpresa(empresa.id), 'SUSPENDIDA');
+  const antes = await servicio.resumen(empresa.id);
+  assert.ok(antes.facturaPendiente);
+
+  let d = await servicio.diasDeGracia(empresa.id, 5, 'Paga el viernes', superUser.id);
+  assert.equal(await estadoEmpresa(empresa.id), 'ACTIVA', 'la gracia la reactiva');
+  assert.equal(d.cuenta.prorrogaHasta, dia(5), 'estaba cortada: se cuenta desde hoy');
+  assert.equal(d.cuenta.pruebaHasta, dia(-10), 'la prueba no se mueve');
+  assert.equal(d.cuenta.facturaPendiente.importe, antes.facturaPendiente.importe, 'debe lo mismo');
+  assert.equal(d.cuenta.facturaPendiente.desde, antes.facturaPendiente.desde, 'y desde el mismo día');
+  assert.equal(d.cuenta.diasDeAtraso, antes.diasDeAtraso, 'el atraso se sigue contando');
+  assert.ok(d.historial.some((h) => h.accion === 'SUSCRIPCION_DIAS_GRACIA' && h.detalle.dias === 5));
+
+  d = await servicio.diasDeGracia(empresa.id, 3, 'Pidió unos días más', superUser.id);
+  assert.equal(d.cuenta.prorrogaHasta, dia(8), 'se suman a los que tenía');
+  await servicio.revisarVencimientos();
+  assert.equal(await estadoEmpresa(empresa.id), 'ACTIVA', 'la tarea diaria los respeta');
+  await assert.rejects(servicio.diasDeGracia(empresa.id, 83, 'Demasiado', superUser.id), /90 días/);
+
+  d = await servicio.registrarPago(empresa.id, { meses: 1, importe: antes.facturaPendiente.importe, medio: 'EFECTIVO', fecha: hoy }, superUser.id);
+  assert.equal(d.cuenta.prorrogaHasta, null, 'al pagar termina la gracia');
+
+  // Al día: se suman después del margen que ya tenía.
+  const alDia = await nuevaEmpresa('Al día con gracia');
+  await fijar(alDia.empresa.id, { pagadoHasta: dia(10) });
+  d = await servicio.diasDeGracia(alDia.empresa.id, 7, 'Acuerdo', superUser.id);
+  assert.equal(d.cuenta.prorrogaHasta, dia(23), 'vence mañana del día 10, 5 de gracia y 7 más');
+  assert.equal(d.cuenta.pagadoHasta, dia(10));
+
+  const sinActivar = await nuevaEmpresa('Sin activar gracia', { diasPrueba: null });
+  await assert.rejects(servicio.diasDeGracia(sinActivar.empresa.id, 5, 'Algo', superUser.id), /alta/);
+});
+
 test('fecha de alta editable: mientras no pagó, la prueba se corre con ella', async () => {
   const { empresa, playas } = await nuevaEmpresa('Alta corrida', { diasPrueba: 10 });
   assert.equal((await servicio.resumen(empresa.id)).pruebaHasta, dia(9));

@@ -267,5 +267,7 @@ test('alta de empresa: la prueba gratis es opcional', async () => {
   // Días extra piden motivo, y solo el super admin puede.
   await call('post', `empresas/${sin.id}/suscripcion/dias-extra`).send({ hasta: '2099-01-01' }).expect(400);
   await call('post', `empresas/${sin.id}/suscripcion/dias-extra`, adminUser).send({ hasta: hoy, motivo: 'intento' }).expect(403);
+  await call('post', `empresas/${sin.id}/suscripcion/dias-gracia`).send({ dias: 5 }).expect(400);
+  await call('post', `empresas/${sin.id}/suscripcion/dias-gracia`, adminUser).send({ dias: 5, motivo: 'intento' }).expect(403);
   await call('patch', `empresas/${sin.id}/suscripcion`).send({ alta: 'ayer' }).expect(400);
 });

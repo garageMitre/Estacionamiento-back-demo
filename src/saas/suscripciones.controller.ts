@@ -24,6 +24,7 @@ import {
   EditarSuscripcionDto,
   ActivarCuentaDto,
   PagosSaasQueryDto,
+  DiasDeGraciaDto,
   DiasExtraDto,
   RegistrarPagoSaasDto,
   CajaQrPlataformaDto,
@@ -191,6 +192,21 @@ export class SuscripcionesController {
     return this.suscripciones.diasExtra(
       id,
       dto.hasta,
+      dto.motivo,
+      this.actor(req),
+    );
+  }
+
+  // Suma días antes de suspender sin cambiar el vencimiento ni lo que debe.
+  @Post('empresas/:id/suscripcion/dias-gracia')
+  diasDeGracia(
+    @Req() req: AuthenticatedRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: DiasDeGraciaDto,
+  ) {
+    return this.suscripciones.diasDeGracia(
+      id,
+      dto.dias,
       dto.motivo,
       this.actor(req),
     );

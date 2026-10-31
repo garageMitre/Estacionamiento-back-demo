@@ -18,8 +18,10 @@ holds only dates (`alta`, `pruebaHasta`, `pagadoHasta`, `prorrogaHasta`), `bonif
 `facturas_saas` are billed periods (one `PENDIENTE` per empresa, `ANULADA` instead of deleting). The account state
 (`SIN_ACTIVAR`, `PRUEBA`, `AL_DIA`, `VENCIDA` + `diasDeAtraso`, …) is never stored: `estado-cuenta.ts` derives it
 from the dates and `empresas.estado`, which stays the only access switch. «Días extra» is a single action: it
-extends the trial if never paid, otherwise it is a prórroga (moves the suspension, not the due date). Payments,
-días extra and alta changes reactivate only `FALTA_DE_PAGO` suspensions; `MANUAL` ones need the super admin. A plan
+extends the trial if never paid, otherwise it is a prórroga (moves the suspension, not the due date). «Días de
+gracia» always add to `prorrogaHasta`, whatever the state, so the invoice's period and amount never change (not
+even the prorated first payment); they accumulate, top out at 90 days from today and end with the next payment. Payments,
+días extra, días de gracia and alta changes reactivate only `FALTA_DE_PAGO` suspensions; `MANUAL` ones need the super admin. A plan
 defines `playas.modulos.inquilinos` (manual toggle then answers `MODULO_DEFINIDO_POR_PLAN`). The `activos` limit
 is soft and only the super admin sees usage; `MiPlanController` never returns it. Mutations live in
 `SuscripcionesController` (super admin, skipped by `TenantInterceptor`); the empresa only reads through
